@@ -5,11 +5,16 @@
   <style>
     body { width: 300px; padding: 10px; font-family: Arial; }
     button { margin: 5px; padding: 10px; width: 100%; }
+    input { margin: 5px; padding: 5px; width: 100%; }
+    p { font-size: 12px; color: red; }
   </style>
 </head>
 <body>
   <button id="extractTranscript">Extract Transcript</button>
-  <button id="captureScreenshot">Capture Screenshot</button>
+  <input type="text" id="timestamp" placeholder="Enter timestamp (e.g., 1:23)">
+  <button id="captureAtTime">Capture at Timestamp</button>
+  <button id="captureScreenshot">Capture Current Frame</button>
+  <p id="errorMessage"></p>
   <script src="popup.js"></script>
 </body>
 </html>
