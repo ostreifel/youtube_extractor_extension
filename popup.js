@@ -110,7 +110,6 @@ document.getElementById('captureScreenshot').addEventListener('click', () => {
     });
   });
 });
-
 document.getElementById('downloadAll').addEventListener('click', () => {
   displayError('');
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
@@ -184,13 +183,30 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     yOffset += 5;
     doc.text(`Dislikes: ${videoInfoResponse.dislikeCount || 'Unknown'}`, 10, yOffset);
     yOffset += 5;
-    // Add transcript line count
+    // Add duration with hours if necessary
+    const durationSeconds = parseInt(videoInfoResponse.duration, 10);
+    let durationFormatted;
+    if (isNaN(durationSeconds)) {
+      durationFormatted = 'Unknown';
+    } else if (durationSeconds >= 3600) {
+      // Format as HH:MM:SS if duration is 1 hour or more
+      const hours = Math.floor(durationSeconds / 3600);
+      const minutes = Math.floor((durationSeconds % 3600) / 60);
+      const seconds = durationSeconds % 60;
+      durationFormatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      // Format as MM:SS if duration is less than 1 hour
+      const minutes = Math.floor(durationSeconds / 60);
+      const seconds = durationSeconds % 60;
+      durationFormatted = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+    doc.text(`Duration: ${durationFormatted}`, 10, yOffset);
+    yOffset += 5;
     const transcriptLineCount = entries.length;
     doc.text(`Transcript Lines: ${transcriptLineCount}`, 10, yOffset);
     yOffset += 5;
-    // Reserve space for screenshot count without writing placeholder text
     const screenshotCountYPosition = yOffset;
-    yOffset += 5; // Reserve space for the "Screenshots" field
+    yOffset += 5;
     yOffset += 10; // Extra spacing after metadata
 
     // Add description
