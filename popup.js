@@ -46,6 +46,7 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
     displayError('Please enter at least one timestamp.');
     return;
   }
+  const includeOffsets = document.getElementById('includeOffsets').checked;
   // Parse timestamps (e.g., "0:10, 6:09, 17:26" or "0:10 6:09 17:26")
   const timestamps = timestampInput.split(/[\s,]+/).filter(t => t).map(parseTimestamp);
   if (timestamps.some(t => t === null)) {
@@ -57,11 +58,11 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
     const doc = new jsPDF();
     let yOffset = 10;
     const pageHeight = doc.internal.pageSize.height;
-    const imgHeight = 100; // Adjust based on desired height in PDF
+    const imgHeight = 50; // Reduced height to fit more images per page
 
     const captureAllTimestamps = async () => {
       for (let seconds of timestamps) {
-        const times = [seconds - 5, seconds, seconds + 5].filter(t => t >= 0);
+        const times = includeOffsets ? [seconds - 5, seconds, seconds + 5].filter(t => t >= 0) : [seconds];
         for (let time of times) {
           const response = await new Promise((resolve) => {
             chrome.tabs.sendMessage(tabs[0].id, { action: 'captureAtTime', time }, resolve);
@@ -71,7 +72,7 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
             const timestampStr = formatTimestamp(seconds);
             const imgData = response.screenshot;
             
-            // Add screenshot to PDF
+            // Add screenshot to PDF with compression
             const img = new Image();
             img.src = imgData;
             await new Promise((resolve) => { img.onload = resolve; });
@@ -83,7 +84,8 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
             }
             doc.text(`Screenshot at ${timestampStr} (${offset}s)`, 10, yOffset);
             yOffset += 10;
-            doc.addImage(imgData, 'PNG', 10, yOffset, imgWidth, imgHeight);
+            // Compress by resizing and using JPEG format with quality
+            doc.addImage(imgData, 'JPEG', 10, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.7);
             yOffset += imgHeight + 10;
           }
         }
