@@ -73,19 +73,23 @@ document.getElementById('captureScreenshot').addEventListener('click', () => {
   });
 });
 
-async function generatePDF(tabId, sampledTimestamps) {
+async function generatePDF(tabId, sampledTimestamps, timestampEnds) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let yOffset = 10;
   const pageHeight = doc.internal.pageSize.height;
   const imgHeight = 50;
 
-  for (let seconds of sampledTimestamps) {
+  for (let i = 0; i < sampledTimestamps.length; i++) {
+    const start = sampledTimestamps[i];
+    const end = timestampEnds[i];
+    const screenshotTime = Math.min(start + (end - start) / 2, end); // Midpoint of the segment
+
     const response = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: seconds }, resolve);
+      chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: screenshotTime }, resolve);
     });
     if (response && response.screenshot) {
-      const timestampStr = formatTimestamp(seconds);
+      const timestampStr = formatTimestamp(start);
       const imgData = response.screenshot;
       
       const img = new Image();
@@ -151,22 +155,40 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     const targetSizeMB = 25;
     const maxSizeMB = 32;
     const pdfOverheadMB = 0.2;
-    const screenshotSizeMB = 0.429;
+    const screenshotSizeMB = 0.426; // Updated based on latest video
     let maxScreenshots = Math.floor((targetSizeMB - pdfOverheadMB) / screenshotSizeMB);
     let n = Math.max(1, Math.ceil(timestamps.length / maxScreenshots));
     let sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
+
+    // Determine the end timestamp for each sampled segment
+    const timestampEnds = sampledTimestamps.map((start, index) => {
+      if (index < sampledTimestamps.length - 1) {
+        return sampledTimestamps[index + 1];
+      }
+      // For the last segment, use the video duration
+      return timestamps[timestamps.length - 1]; // Approximate end
+    });
 
     let pdfSizeMB = 0;
     let pdfBlob = null;
 
     // Generate PDF and adjust sampling if necessary
     do {
-      pdfBlob = await generatePDF(tabId, sampledTimestamps);
+      pdfBlob = await generatePDF(tabId, sampledTimestamps, timestampEnds);
       pdfSizeMB = pdfBlob.size / (1024 * 1024); // Convert bytes to MB
       if (pdfSizeMB > maxSizeMB) {
         n += 1; // Increase sampling interval to reduce number of screenshots
         maxScreenshots = Math.floor(timestamps.length / n);
         sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
+        // Recalculate timestamp ends
+        timestampEnds.length = 0;
+        sampledTimestamps.forEach((start, index) => {
+          if (index < sampledTimestamps.length - 1) {
+            timestampEnds.push(sampledTimestamps[index + 1]);
+          } else {
+            timestampEnds.push(timestamps[timestamps.length - 1]);
+          }
+        });
       }
     } while (pdfSizeMB > maxSizeMB);
 
