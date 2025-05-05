@@ -116,6 +116,10 @@ document.getElementById('downloadAll').addEventListener('click', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
 
+    const videoLengthResponse = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'getVideoInfo' }, resolve);
+    });
+
     // Extract transcript and video title
     const transcriptResponse = await new Promise((resolve) => {
       chrome.tabs.sendMessage(tabId, { action: 'extractTranscriptWithTitle' }, resolve);
@@ -207,8 +211,10 @@ document.getElementById('downloadAll').addEventListener('click', () => {
 
       // Add screenshot if this timestamp is sampled
       if (isSampled) {
+        const timeAtNextTranscriptLine = i + 1 < entries.length ? entries[i + 1].seconds : videoLengthResponse.duration;
+        const timeAtMiddleOfTranscriptLine = (entry.seconds + timeAtNextTranscriptLine) / 2;
         const response = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: entry.seconds }, resolve);
+          chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: timeAtMiddleOfTranscriptLine }, resolve);
         });
         if (response && response.screenshot) {
           screenshotCount++;
@@ -229,7 +235,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
           nextTranscriptLineIndexForScreenshot += screenshotInterval; // Increment the index for the next screenshot
           console.log(`Screenshot ${screenshotCount} at ${entry.timestamp}: Size ${screenshotSize.toFixed(2)} MB, Running Total: ${runningTotalSize.toFixed(2)} MB`);
 
-          const timestampStr = formatTimestamp(entry.seconds);
+          const timestampStr = formatTimestamp(timeAtMiddleOfTranscriptLine);
           const label = `Screenshot at ${timestampStr}`;
           const imgData = response.screenshot;
 
