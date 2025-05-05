@@ -53,7 +53,12 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
     return;
   }
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const zip = new JSZip();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let yOffset = 10;
+    const pageHeight = doc.internal.pageSize.height;
+    const imgHeight = 100; // Adjust based on desired height in PDF
+
     const captureAllTimestamps = async () => {
       for (let seconds of timestamps) {
         const times = [seconds - 5, seconds, seconds + 5].filter(t => t >= 0);
@@ -64,21 +69,27 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
           if (response && response.screenshot) {
             const offset = time - seconds;
             const timestampStr = formatTimestamp(seconds);
-            const dataUrl = response.screenshot;
-            const base64Data = dataUrl.split(',')[1];
-            zip.file(`screenshot_${timestampStr.replace(/:/g, '_')}_${offset}s.png`, base64Data, { base64: true });
+            const imgData = response.screenshot;
+            
+            // Add screenshot to PDF
+            const img = new Image();
+            img.src = imgData;
+            await new Promise((resolve) => { img.onload = resolve; });
+            
+            const imgWidth = (img.width * imgHeight) / img.height; // Maintain aspect ratio
+            if (yOffset + imgHeight > pageHeight - 20) {
+              doc.addPage();
+              yOffset = 10;
+            }
+            doc.text(`Screenshot at ${timestampStr} (${offset}s)`, 10, yOffset);
+            yOffset += 10;
+            doc.addImage(imgData, 'PNG', 10, yOffset, imgWidth, imgHeight);
+            yOffset += imgHeight + 10;
           }
         }
       }
-      zip.generateAsync({ type: 'blob' }).then((content) => {
-        const url = URL.createObjectURL(content);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'screenshots.zip';
-        a.click();
-        URL.revokeObjectURL(url);
-        alert('Screenshots saved as ZIP!');
-      });
+      doc.save('screenshots.pdf');
+      alert('Screenshots saved as PDF!');
     };
     captureAllTimestamps();
   });
