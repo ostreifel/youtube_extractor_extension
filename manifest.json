@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Transcript and Screenshot Extractor",
-  "version": "1.4",
+  "version": "1.7",
   "description": "Extracts YouTube video transcripts and captures screenshots at specific timestamps for sharing with Grok",
   "permissions": ["activeTab", "storage"],
   "content_scripts": [

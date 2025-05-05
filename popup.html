@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -9,12 +8,12 @@
     input { margin: 5px; padding: 5px; width: 100%; }
     p { font-size: 12px; color: red; }
   </style>
+  <script src="jszip.min.js"></script>
 </head>
 <body>
   <button id="extractTranscript">Extract Transcript</button>
-  <input type="text" id="timestamp" placeholder="Enter timestamp (e.g., 1:23)">
-  <button id="captureAtTime">Capture at Timestamp</button>
-  <button id="captureRange">Capture Range (±5s)</button>
+  <input type="text" id="timestamps" placeholder="Enter timestamps (e.g., 0:10, 6:09, 17:26)">
+  <button id="captureAtTimes">Capture at Timestamps</button>
   <button id="captureScreenshot">Capture Current Frame</button>
   <p id="errorMessage"></p>
   <script src="popup.js"></script>
