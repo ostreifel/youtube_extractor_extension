@@ -162,7 +162,6 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     let yOffset = 10;
     const pageHeight = doc.internal.pageSize.height;
     const imgHeight = 50;
-    // start with 100kb for transcipts texts before images.
     runningTotalSize = 100 / (1024 * 1024); // 100 KB in MB
     screenshotCount = 0;
 
@@ -172,20 +171,27 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     doc.text(videoTitle, 10, yOffset);
     yOffset += 15;
 
-    // Add meta data below the title
+    // Add metadata below the title
     doc.setFont('helvetica', 'italic');
     doc.setFontSize(10);
-    doc.text(`Author name: ${videoInfoResponse.authorName}`, 10, yOffset);
+    doc.text(`Author name: ${videoInfoResponse.authorName || 'Unknown'}`, 10, yOffset);
     yOffset += 5; 
-    doc.text(`Upload date: ${videoInfoResponse.uploadDate}`, 10, yOffset);
+    doc.text(`Upload date: ${videoInfoResponse.uploadDate || 'Unknown'}`, 10, yOffset);
     yOffset += 5; 
-    doc.text(`Views: ${videoInfoResponse.viewCount}`, 10, yOffset);
+    doc.text(`Views: ${videoInfoResponse.viewCount || 'Unknown'}`, 10, yOffset);
     yOffset += 5;
-    doc.text(`Likes: ${videoInfoResponse.likeCount}`, 10, yOffset);
+    doc.text(`Likes: ${videoInfoResponse.likeCount || 'Unknown'}`, 10, yOffset);
     yOffset += 5;
-    doc.text(`Dislikes: ${videoInfoResponse.dislikeCount}`, 10, yOffset);
-    yOffset += 5; 
-    yOffset += 10; // Extra spacing after meta data
+    doc.text(`Dislikes: ${videoInfoResponse.dislikeCount || 'Unknown'}`, 10, yOffset);
+    yOffset += 5;
+    // Add transcript line count
+    const transcriptLineCount = entries.length;
+    doc.text(`Transcript Lines: ${transcriptLineCount}`, 10, yOffset);
+    yOffset += 5;
+    // Reserve space for screenshot count without writing placeholder text
+    const screenshotCountYPosition = yOffset;
+    yOffset += 5; // Reserve space for the "Screenshots" field
+    yOffset += 10; // Extra spacing after metadata
 
     // Add description
     doc.setFont('helvetica', 'bold');
@@ -193,7 +199,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     doc.text('Description:', 10, yOffset);
     yOffset += 5;
     doc.setFont('helvetica', 'normal');
-    const descriptionLines = doc.splitTextToSize(videoInfoResponse.description, 190);
+    const descriptionLines = doc.splitTextToSize(videoInfoResponse.description || 'No description available', 190);
     for (const line of descriptionLines) {
       if (yOffset + 10 > pageHeight - 20) {
         doc.addPage();
@@ -210,7 +216,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     const preambleLines = preamble.split('\n');
     for (const line of preambleLines) {
       if (line.trim()) {
-        const wrappedLines = doc.splitTextToSize(line, 190); // 190 is the width in points (A4 page width - margins)
+        const wrappedLines = doc.splitTextToSize(line, 190);
         for (const wrappedLine of wrappedLines) {
           if (yOffset + 10 > pageHeight - 20) {
             doc.addPage();
@@ -224,7 +230,6 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     yOffset += 10; // Extra spacing after preamble
 
     let nextTranscriptLineIndexForScreenshot = 0;
-    // Start with every line in the transcript and then update the sampling rate after each screenshot.
     let screenshotInterval = 1;
 
     // Intermingle transcript and screenshots with dynamic sampling
@@ -252,7 +257,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
 
           if (screenshotSize + runningTotalSize > MAX_PDF_SIZE_MB) {
             console.warn(`Skipping screenshot at ${entry.timestamp} due to size limit.`);
-            continue; // Skip this screenshot if it exceeds the size limit
+            continue;
           }
           screenshotCount++;
 
@@ -262,8 +267,8 @@ document.getElementById('downloadAll').addEventListener('click', () => {
           const remainingTranscriptLines = entries.length - i - 1;
           const remainingScreenshots = Math.floor(remainingSize / screenshotSize);
 
-          screenshotInterval = Math.max(1, Math.floor(remainingTranscriptLines / remainingScreenshots)); // Update sampling rate based on size
-          nextTranscriptLineIndexForScreenshot += screenshotInterval; // Increment the index for the next screenshot
+          screenshotInterval = Math.max(1, Math.floor(remainingTranscriptLines / remainingScreenshots));
+          nextTranscriptLineIndexForScreenshot += screenshotInterval;
           console.log(`Screenshot ${screenshotCount} at ${entry.timestamp}: Size ${screenshotSize.toFixed(2)} MB, Running Total: ${runningTotalSize.toFixed(2)} MB`);
 
           const timestampStr = formatTimestamp(timeAtMiddleOfTranscriptLine);
@@ -292,12 +297,19 @@ document.getElementById('downloadAll').addEventListener('click', () => {
         }
       }
     }
+
+    // Update the screenshot count in the metadata section
+    doc.setPage(1);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.text(`Screenshots: ${screenshotCount}`, 10, screenshotCountYPosition);
+
     const pageCount = doc.getNumberOfPages();
     for (let p = 1; p <= pageCount; p++) {
       doc.setPage(p);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(`Page ${p} of ${pageCount}`, 190, 287, { align: 'right' }); // Bottom-right corner
+      doc.text(`Page ${p} of ${pageCount}`, 190, 287, { align: 'right' });
     }
 
     console.log(`Final screenshot count: ${screenshotCount}, Final size estimate: ${runningTotalSize.toFixed(2)} MB`);
