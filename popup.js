@@ -1,4 +1,3 @@
-
 function displayError(message) {
   document.getElementById('errorMessage').textContent = message;
 }
@@ -47,14 +46,8 @@ document.getElementById('captureAtTime').addEventListener('click', () => {
     displayError('Please enter a timestamp.');
     return;
   }
-  // Parse timestamp (e.g., "1:23" or "01:23:45") to seconds
-  const parts = timestamp.split(':').map(Number);
-  let seconds = 0;
-  if (parts.length === 2) {
-    seconds = parts[0] * 60 + parts[1];
-  } else if (parts.length === 3) {
-    seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-  } else {
+  const seconds = parseTimestamp(timestamp);
+  if (seconds === null) {
     displayError('Invalid timestamp format. Use MM:SS or HH:MM:SS.');
     return;
   }
@@ -72,3 +65,50 @@ document.getElementById('captureAtTime').addEventListener('click', () => {
     });
   });
 });
+
+document.getElementById('captureRange').addEventListener('click', () => {
+  displayError('');
+  const timestamp = document.getElementById('timestamp').value.trim();
+  if (!timestamp) {
+    displayError('Please enter a timestamp.');
+    return;
+  }
+  const seconds = parseTimestamp(timestamp);
+  if (seconds === null) {
+    displayError('Invalid timestamp format. Use MM:SS or HH:MM:SS.');
+    return;
+  }
+  const times = [seconds - 5, seconds, seconds + 5].filter(time => time >= 0);
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    // Process each timestamp sequentially using Promises
+    const captureSequentially = async () => {
+      for (let time of times) {
+        await new Promise((resolve) => {
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'captureAtTime', time }, (response) => {
+            if (response && response.screenshot) {
+              const offset = time - seconds;
+              const a = document.createElement('a');
+              a.href = response.screenshot;
+              a.download = `screenshot_${timestamp.replace(/:/g, '_')}_${offset}s.png`;
+              a.click();
+            }
+            resolve();
+          });
+        });
+      }
+      alert('Screenshots saved for range!');
+    };
+    captureSequentially();
+  });
+});
+
+function parseTimestamp(timestamp) {
+  const parts = timestamp.split(':').map(Number);
+  if (parts.some(isNaN)) return null;
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return null;
+}
