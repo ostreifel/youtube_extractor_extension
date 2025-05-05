@@ -103,7 +103,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
       if (match) {
         const timestamp = match[1];
         const seconds = parseTimestamp(timestamp);
-        if (seconds !== null) {
+        if (seconds !== null && !timestamps.includes(seconds)) {
           timestamps.push(seconds);
         }
       }
@@ -117,7 +117,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     // Calculate sampling rate to stay under 25 MB (no offsets for Download All)
     const targetSizeMB = 25;
     const pdfOverheadMB = 0.2;
-    const screenshotSizeMB = 0.322; // Updated based on 80 MB for 248 screenshots
+    const screenshotSizeMB = 0.429; // Updated based on 33 MB for 77 screenshots
     const maxScreenshots = Math.floor((targetSizeMB - pdfOverheadMB) / screenshotSizeMB);
     const n = Math.max(1, Math.ceil(timestamps.length / maxScreenshots));
     const sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
