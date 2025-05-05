@@ -212,7 +212,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
       // Add screenshot if this timestamp is sampled
       if (isSampled) {
         const timeAtNextTranscriptLine = i + 1 < entries.length ? entries[i + 1].seconds : videoLengthResponse.duration;
-        const timeAtMiddleOfTranscriptLine = (entry.seconds + timeAtNextTranscriptLine) / 2;
+        const timeAtMiddleOfTranscriptLine = Math.ceil((entry.seconds + timeAtNextTranscriptLine) / 2);
         const response = await new Promise((resolve) => {
           chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: timeAtMiddleOfTranscriptLine }, resolve);
         });
@@ -261,6 +261,14 @@ document.getElementById('downloadAll').addEventListener('click', () => {
         }
       }
     }
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`Page ${p} of ${pageCount}`, 190, 287, { align: 'right' }); // Bottom-right corner
+    }
+
     console.log(`Final screenshot count: ${screenshotCount}, Final size estimate: ${runningTotalSize.toFixed(2)} MB`);
     doc.save('transcript_with_screenshots.pdf');
     alert('Transcript and screenshots saved as PDF!');
@@ -333,6 +341,15 @@ document.getElementById('captureAtTimes').addEventListener('click', () => {
         }
       }
     }
+
+    const pageCount = doc.getNumberOfPages();
+    for (let p = 1; p <= pageCount; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(`Page ${p} of ${pageCount}`, 190, 287, { align: 'right' }); // Bottom-right corner
+    }
+
     doc.save('screenshots.pdf');
     alert('Screenshots saved as PDF!');
   });
