@@ -114,17 +114,15 @@ document.getElementById('downloadAll').addEventListener('click', () => {
       return;
     }
 
-    // Calculate sampling rate to stay under 25 MB
-    const includeOffsets = document.getElementById('includeOffsets').checked;
-    const screenshotsPerTimestamp = includeOffsets ? 3 : 1;
+    // Calculate sampling rate to stay under 25 MB (no offsets for Download All)
     const targetSizeMB = 25;
     const pdfOverheadMB = 0.2;
-    const maxScreenshots = Math.floor((targetSizeMB - pdfOverheadMB) / (estimatedScreenshotSize * screenshotsPerTimestamp));
-    const maxTimestamps = Math.floor(maxScreenshots / screenshotsPerTimestamp);
-    const n = Math.max(1, Math.ceil(timestamps.length / maxTimestamps));
+    const screenshotSizeMB = 0.322; // Updated based on 80 MB for 248 screenshots
+    const maxScreenshots = Math.floor((targetSizeMB - pdfOverheadMB) / screenshotSizeMB);
+    const n = Math.max(1, Math.ceil(timestamps.length / maxScreenshots));
     const sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
 
-    const numScreenshots = sampledTimestamps.length * screenshotsPerTimestamp;
+    const numScreenshots = sampledTimestamps.length;
     displayEstimatedSize(numScreenshots);
 
     // Capture screenshots
@@ -135,30 +133,26 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     const imgHeight = 50;
 
     for (let seconds of sampledTimestamps) {
-      const times = includeOffsets ? [seconds - 5, seconds, seconds + 5].filter(t => t >= 0) : [seconds];
-      for (let time of times) {
-        const response = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time }, resolve);
-        });
-        if (response && response.screenshot) {
-          const offset = time - seconds;
-          const timestampStr = formatTimestamp(seconds);
-          const imgData = response.screenshot;
-          
-          const img = new Image();
-          img.src = imgData;
-          await new Promise((resolve) => { img.onload = resolve; });
-          
-          const imgWidth = (img.width * imgHeight) / img.height;
-          if (yOffset + imgHeight > pageHeight - 20) {
-            doc.addPage();
-            yOffset = 10;
-          }
-          doc.text(`Screenshot at ${timestampStr} (${offset}s)`, 10, yOffset);
-          yOffset += 10;
-          doc.addImage(imgData, 'JPEG', 10, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.7);
-          yOffset += imgHeight + 10;
+      const response = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: seconds }, resolve);
+      });
+      if (response && response.screenshot) {
+        const timestampStr = formatTimestamp(seconds);
+        const imgData = response.screenshot;
+        
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve) => { img.onload = resolve; });
+        
+        const imgWidth = (img.width * imgHeight) / img.height;
+        if (yOffset + imgHeight > pageHeight - 20) {
+          doc.addPage();
+          yOffset = 10;
         }
+        doc.text(`Screenshot at ${timestampStr} (0s)`, 10, yOffset);
+        yOffset += 10;
+        doc.addImage(imgData, 'JPEG', 10, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.7);
+        yOffset += imgHeight + 10;
       }
     }
     doc.save('screenshots.pdf');
