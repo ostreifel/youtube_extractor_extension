@@ -73,40 +73,77 @@ document.getElementById('captureScreenshot').addEventListener('click', () => {
   });
 });
 
-async function generatePDF(tabId, sampledTimestamps, timestampEnds) {
+async function generateCombinedPDF(tabId, transcriptLines, timestamps, sampledTimestamps, screenshotTimes) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   let yOffset = 10;
   const pageHeight = doc.internal.pageSize.height;
   const imgHeight = 50;
+  const lineHeight = 5;
+  const margin = 10;
+  const maxWidth = 190;
 
-  for (let i = 0; i < sampledTimestamps.length; i++) {
-    const start = sampledTimestamps[i];
-    const end = timestampEnds[i];
-    const screenshotTime = Math.min(start + (end - start) / 2, end); // Midpoint of the segment
+  doc.setFontSize(10);
 
-    const response = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: screenshotTime }, resolve);
-    });
-    if (response && response.screenshot) {
-      const timestampStr = formatTimestamp(start);
-      const imgData = response.screenshot;
-      
-      const img = new Image();
-      img.src = imgData;
-      await new Promise((resolve) => { img.onload = resolve; });
-      
-      const imgWidth = (img.width * imgHeight) / img.height;
-      if (yOffset + imgHeight > pageHeight - 20) {
+  // Add header (first few lines of transcript)
+  const headerLines = transcriptLines.slice(0, transcriptLines.findIndex(line => line.startsWith('Transcript Content:')) + 2);
+  for (const line of headerLines) {
+    const wrappedLines = doc.splitTextToSize(line, maxWidth);
+    for (const wrappedLine of wrappedLines) {
+      if (yOffset + lineHeight > pageHeight - 10) {
         doc.addPage();
         yOffset = 10;
       }
-      doc.text(`Screenshot at ${timestampStr} (0s)`, 10, yOffset);
-      yOffset += 10;
-      doc.addImage(imgData, 'JPEG', 10, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.7);
-      yOffset += imgHeight + 10;
+      doc.text(wrappedLine, margin, yOffset);
+      yOffset += lineHeight;
     }
   }
+
+  // Process transcript lines and insert screenshots
+  let screenshotIndex = 0;
+  for (let i = 0; i < timestamps.length; i++) {
+    const timestamp = timestamps[i];
+    const line = transcriptLines[i + headerLines.length - 1]; // Adjust for header lines
+
+    // Add the transcript line
+    const wrappedLines = doc.splitTextToSize(line, maxWidth);
+    for (const wrappedLine of wrappedLines) {
+      if (yOffset + lineHeight > pageHeight - 10) {
+        doc.addPage();
+        yOffset = 10;
+      }
+      doc.text(wrappedLine, margin, yOffset);
+      yOffset += lineHeight;
+    }
+
+    // Insert any screenshots that fall between this timestamp and the next
+    while (screenshotIndex < screenshotTimes.length && (i === timestamps.length - 1 || screenshotTimes[screenshotIndex] <= (i + 1 < timestamps.length ? timestamps[i + 1] : screenshotTimes[screenshotIndex]))) {
+      const screenshotTime = screenshotTimes[screenshotIndex];
+      const response = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: screenshotTime }, resolve);
+      });
+      if (response && response.screenshot) {
+        const timestampStr = formatTimestamp(screenshotTime);
+        const imgData = response.screenshot;
+
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve) => { img.onload = resolve; });
+
+        const imgWidth = (img.width * imgHeight) / img.height;
+        if (yOffset + imgHeight + 10 > pageHeight - 10) {
+          doc.addPage();
+          yOffset = 10;
+        }
+        doc.text(`Screenshot at ${timestampStr} (0s)`, margin, yOffset);
+        yOffset += 10;
+        doc.addImage(imgData, 'JPEG', margin, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.7);
+        yOffset += imgHeight + 10;
+      }
+      screenshotIndex++;
+    }
+  }
+
   return doc.output('blob');
 }
 
@@ -123,15 +160,8 @@ document.getElementById('downloadAll').addEventListener('click', () => {
       displayError('No transcript available. Ensure captions are enabled (CC button).');
       return;
     }
-    const transcriptBlob = new Blob([transcriptResponse.transcript], { type: 'text/plain' });
-    const transcriptUrl = URL.createObjectURL(transcriptBlob);
-    const transcriptLink = document.createElement('a');
-    transcriptLink.href = transcriptUrl;
-    transcriptLink.download = 'transcript.txt';
-    transcriptLink.click();
-    URL.revokeObjectURL(transcriptUrl);
 
-    // Parse transcript to get timestamps
+    // Parse transcript to get timestamps and lines
     const transcriptLines = transcriptResponse.transcript.split('\n');
     const timestamps = [];
     const timestampRegex = /^\[(\d+:\d+(?::\d+)?)\]/;
@@ -155,18 +185,29 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     const targetSizeMB = 25;
     const maxSizeMB = 32;
     const pdfOverheadMB = 0.2;
-    const screenshotSizeMB = 0.426; // Updated based on latest video
+    const screenshotSizeMB = 0.426; // Based on previous videos
     let maxScreenshots = Math.floor((targetSizeMB - pdfOverheadMB) / screenshotSizeMB);
     let n = Math.max(1, Math.ceil(timestamps.length / maxScreenshots));
     let sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
+
+    // Get video duration for last segment
+    const videoInfoResponse = await new Promise((resolve) => {
+      chrome.tabs.sendMessage(tabId, { action: 'getVideoInfo' }, resolve);
+    });
+    const videoDuration = videoInfoResponse && videoInfoResponse.duration ? videoInfoResponse.duration : timestamps[timestamps.length - 1] + 10;
 
     // Determine the end timestamp for each sampled segment
     const timestampEnds = sampledTimestamps.map((start, index) => {
       if (index < sampledTimestamps.length - 1) {
         return sampledTimestamps[index + 1];
       }
-      // For the last segment, use the video duration
-      return timestamps[timestamps.length - 1]; // Approximate end
+      return videoDuration; // Use actual video duration for the last segment
+    });
+
+    // Calculate screenshot times (midpoints)
+    const screenshotTimes = sampledTimestamps.map((start, index) => {
+      const end = timestampEnds[index];
+      return Math.min(start + (end - start) / 2, end);
     });
 
     let pdfSizeMB = 0;
@@ -174,34 +215,32 @@ document.getElementById('downloadAll').addEventListener('click', () => {
 
     // Generate PDF and adjust sampling if necessary
     do {
-      pdfBlob = await generatePDF(tabId, sampledTimestamps, timestampEnds);
+      pdfBlob = await generateCombinedPDF(tabId, transcriptLines, timestamps, sampledTimestamps, screenshotTimes);
       pdfSizeMB = pdfBlob.size / (1024 * 1024); // Convert bytes to MB
       if (pdfSizeMB > maxSizeMB) {
         n += 1; // Increase sampling interval to reduce number of screenshots
         maxScreenshots = Math.floor(timestamps.length / n);
         sampledTimestamps = timestamps.filter((_, index) => index % n === 0);
-        // Recalculate timestamp ends
         timestampEnds.length = 0;
+        screenshotTimes.length = 0;
         sampledTimestamps.forEach((start, index) => {
-          if (index < sampledTimestamps.length - 1) {
-            timestampEnds.push(sampledTimestamps[index + 1]);
-          } else {
-            timestampEnds.push(timestamps[timestamps.length - 1]);
-          }
+          const end = index < sampledTimestamps.length - 1 ? sampledTimestamps[index + 1] : videoDuration;
+          timestampEnds.push(end);
+          screenshotTimes.push(Math.min(start + (end - start) / 2, end));
         });
       }
     } while (pdfSizeMB > maxSizeMB);
 
-    displayEstimatedSize(sampledTimestamps.length);
+    displayEstimatedSize(screenshotTimes.length);
 
     // Save the PDF
     const url = URL.createObjectURL(pdfBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'screenshots.pdf';
+    a.download = 'transcript_with_screenshots.pdf';
     a.click();
     URL.revokeObjectURL(url);
-    alert('Screenshots saved as PDF!');
+    alert('Transcript and screenshots saved as PDF!');
   });
 });
 
@@ -277,7 +316,7 @@ function parseTimestamp(timestamp) {
 function formatTimestamp(seconds) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
+  const secs = Math.floor(seconds % 60);
   if (hours > 0) {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
