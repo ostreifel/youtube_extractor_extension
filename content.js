@@ -87,7 +87,7 @@ Transcript Content:
       // Fallback to the abbreviated description in the description panel is not expanded.
       response.description = document.querySelector('#description-inline-expander yt-attributed-string')?.textContent ?? document.querySelector('meta[name="description"]').content;
       response.uploadDate = document.querySelector('meta[itemprop=uploadDate]')?.content;
-      response.viewCount = document.querySelector('#view-count')?.ariaLabel?.trim();
+      response.viewCount = document.querySelector('view-count-factoid-renderer .yt-core-attributed-string')?.textContent;
       response.likeCount = document.querySelector('like-button-view-model button')?.ariaLabel?.replace(/\D+/g,'');
       response.dislikeCount = document.querySelector('dislike-button-view-model button')?.textContent;
     } catch (e) {
