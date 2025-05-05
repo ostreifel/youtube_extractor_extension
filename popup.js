@@ -116,7 +116,7 @@ document.getElementById('downloadAll').addEventListener('click', () => {
   chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tabId = tabs[0].id;
 
-    const videoLengthResponse = await new Promise((resolve) => {
+    const videoInfoResponse = await new Promise((resolve) => {
       chrome.tabs.sendMessage(tabId, { action: 'getVideoInfo' }, resolve);
     });
 
@@ -165,13 +165,44 @@ document.getElementById('downloadAll').addEventListener('click', () => {
     // start with 100kb for transcipts texts before images.
     runningTotalSize = 100 / (1024 * 1024); // 100 KB in MB
     screenshotCount = 0;
-    let sampledIndex = 0;
 
     // Add video title as header
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.text(videoTitle, 10, yOffset);
     yOffset += 15;
+
+    // Add meta data below the title
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(10);
+    doc.text(`Author name: ${videoInfoResponse.authorName}`, 10, yOffset);
+    yOffset += 5; 
+    doc.text(`Upload date: ${videoInfoResponse.uploadDate}`, 10, yOffset);
+    yOffset += 5; 
+    doc.text(`Views: ${videoInfoResponse.viewCount}`, 10, yOffset);
+    yOffset += 5;
+    doc.text(`Likes: ${videoInfoResponse.likeCount}`, 10, yOffset);
+    yOffset += 5;
+    doc.text(`Dislikes: ${videoInfoResponse.dislikeCount}`, 10, yOffset);
+    yOffset += 5; 
+    yOffset += 10; // Extra spacing after meta data
+
+    // Add description
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Description:', 10, yOffset);
+    yOffset += 5;
+    doc.setFont('helvetica', 'normal');
+    const descriptionLines = doc.splitTextToSize(videoInfoResponse.description, 190);
+    for (const line of descriptionLines) {
+      if (yOffset + 10 > pageHeight - 20) {
+        doc.addPage();
+        yOffset = 10;
+      }
+      doc.text(line, 10, yOffset);
+      yOffset += 5;
+    }
+    yOffset += 10; // Extra spacing after description
 
     // Add preamble with text wrapping
     doc.setFont('helvetica', 'normal');
@@ -211,19 +242,19 @@ document.getElementById('downloadAll').addEventListener('click', () => {
 
       // Add screenshot if this timestamp is sampled
       if (isSampled) {
-        const timeAtNextTranscriptLine = i + 1 < entries.length ? entries[i + 1].seconds : videoLengthResponse.duration;
+        const timeAtNextTranscriptLine = i + 1 < entries.length ? entries[i + 1].seconds : videoInfoResponse.duration;
         const timeAtMiddleOfTranscriptLine = Math.ceil((entry.seconds + timeAtNextTranscriptLine) / 2);
         const response = await new Promise((resolve) => {
           chrome.tabs.sendMessage(tabId, { action: 'captureAtTime', time: timeAtMiddleOfTranscriptLine }, resolve);
         });
         if (response && response.screenshot) {
-          screenshotCount++;
           const screenshotSize = await estimateSingleScreenshotSize(response.screenshot);
 
           if (screenshotSize + runningTotalSize > MAX_PDF_SIZE_MB) {
             console.warn(`Skipping screenshot at ${entry.timestamp} due to size limit.`);
             continue; // Skip this screenshot if it exceeds the size limit
           }
+          screenshotCount++;
 
           runningTotalSize += screenshotSize;
           
@@ -244,16 +275,16 @@ document.getElementById('downloadAll').addEventListener('click', () => {
           await new Promise((resolve) => { img.onload = resolve; });
 
           const imgWidth = (img.width * imgHeight) / img.height;
-          if (yOffset + imgHeight + 15 > pageHeight - 20) {
+          if (yOffset + imgHeight + 10 > pageHeight - 20) {
             doc.addPage();
             yOffset = 10;
           }
           doc.setFont('helvetica', 'italic');
           doc.setFontSize(12);
           doc.text(label, 10, yOffset);
-          yOffset += 10;
+          yOffset += 5;
           doc.addImage(imgData, 'JPEG', 10, yOffset, imgWidth, imgHeight, null, 'SLOW', 0.5);
-          yOffset += imgHeight + 10;
+          yOffset += imgHeight + 5;
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(10);
         } else {
