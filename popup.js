@@ -1,4 +1,4 @@
-const MAX_PDF_SIZE_MB = 32; // Maximum PDF size in MB 
+const MAX_PDF_SIZE_MB = 28; // Maximum PDF size in MB 
 const TRANSCRIPT_ERROR_MESSAGE = 'No transcript available. Expand the description and click "Show Transcript".';
 let estimatedScreenshotSize = 0;
 let runningTotalSize = 0;
